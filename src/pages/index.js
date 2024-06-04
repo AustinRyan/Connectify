@@ -1,118 +1,416 @@
 import Image from "next/image";
 import { Inter } from "next/font/google";
+import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { useSession, getSession } from "next-auth/react";
+import axios from "axios";
+import Modal from "../components/ui/Modal";
+import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faHeart, faRetweet } from "@fortawesome/free-solid-svg-icons";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export default function Home() {
-  return (
-    <main
-      className={`flex min-h-screen flex-col items-center justify-between p-24 ${inter.className}`}
-    >
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/pages/index.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [tweets, setTweets] = useState([]);
+  const [newTweet, setNewTweet] = useState("");
+  const { data: session, status } = useSession();
+  const [selectedTweet, setSelectedTweet] = useState(null);
 
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700/10 after:dark:from-sky-900 after:dark:via-[#0141ff]/40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
+  useEffect(() => {
+    const fetchTweets = async () => {
+      try {
+        const response = await axios.get("/api/tweets/fetchAll");
+        const tweetsWithDefaults = response.data.map((tweet) => ({
+          ...tweet,
+          likes: tweet.likes || [],
+          retweets: tweet.retweets || [],
+        }));
+        setTweets(tweetsWithDefaults);
+      } catch (error) {
+        console.error("Error fetching tweets:", error);
+      }
+    };
+
+    fetchTweets();
+  }, []);
+
+  const handlePostNewTweet = async (e) => {
+    e.preventDefault();
+    if (!newTweet.trim()) return;
+
+    try {
+      const session = await getSession();
+      if (!session || !session.accessToken) {
+        console.error("No session or access token found");
+        return;
+      }
+
+      const response = await axios.post(
+        "/api/tweets/create",
+        { content: newTweet },
+        {
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+          },
+        }
+      );
+
+      setTweets([{ ...response.data, likes: [], retweets: [] }, ...tweets]);
+      setNewTweet("");
+    } catch (error) {
+      console.error("Error posting new tweet:", error);
+    }
+  };
+
+  const handleLike = async (tweetId) => {
+    if (!session) {
+      setIsModalOpen(true);
+      return;
+    }
+
+    try {
+      const session = await getSession();
+      if (!session || !session.accessToken) {
+        console.error("No session or access token found");
+        return;
+      }
+
+      await axios.post(
+        "/api/tweets/like",
+        { tweetId },
+        {
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+          },
+        }
+      );
+
+      setTweets((prevTweets) =>
+        prevTweets.map((tweet) =>
+          tweet.id === tweetId
+            ? {
+                ...tweet,
+                likes: [...(tweet.likes || []), { userId: session.user.id }],
+              }
+            : tweet
+        )
+      );
+
+      if (selectedTweet && selectedTweet.id === tweetId) {
+        setSelectedTweet((prevSelectedTweet) => ({
+          ...prevSelectedTweet,
+          likes: [
+            ...(prevSelectedTweet.likes || []),
+            { userId: session.user.id },
+          ],
+        }));
+      }
+    } catch (error) {
+      console.error("Error liking tweet:", error);
+    }
+  };
+
+  const handleRetweet = async (tweetId) => {
+    if (!session) {
+      setIsModalOpen(true);
+      return;
+    }
+
+    try {
+      const session = await getSession();
+      if (!session || !session.accessToken) {
+        console.error("No session or access token found");
+        return;
+      }
+
+      await axios.post(
+        "/api/tweets/retweet",
+        { tweetId },
+        {
+          headers: {
+            Authorization: `Bearer ${session.accessToken}`,
+          },
+        }
+      );
+
+      setTweets((prevTweets) =>
+        prevTweets.map((tweet) =>
+          tweet.id === tweetId
+            ? {
+                ...tweet,
+                retweets: [
+                  ...(tweet.retweets || []),
+                  { userId: session.user.id },
+                ],
+              }
+            : tweet
+        )
+      );
+
+      if (selectedTweet && selectedTweet.id === tweetId) {
+        setSelectedTweet((prevSelectedTweet) => ({
+          ...prevSelectedTweet,
+          retweets: [
+            ...(prevSelectedTweet.retweets || []),
+            { userId: session.user.id },
+          ],
+        }));
+      }
+    } catch (error) {
+      console.error("Error retweeting tweet:", error);
+    }
+  };
+
+  const handleExpandTweet = (tweet) => {
+    if (!session) {
+      setIsModalOpen(true);
+      return;
+    }
+    setSelectedTweet(tweet);
+  };
+
+  return (
+    <div className="flex-1 flex flex-col bg-gray-900 text-white">
+      <div className="flex flex-1">
+        <MainContent
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onTweetSubmit={handlePostNewTweet}
+          tweets={tweets}
+          newTweet={newTweet}
+          setNewTweet={setNewTweet}
+          selectedTweet={selectedTweet}
+          setSelectedTweet={setSelectedTweet}
+          onLike={handleLike}
+          onRetweet={handleRetweet}
+          onExpandTweet={handleExpandTweet}
+          session={session}
         />
       </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Discover and deploy boilerplate example Next.js&nbsp;projects.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+    </div>
   );
 }
+
+const MainContent = ({
+  onToggleSidebar,
+  onTweetSubmit,
+  tweets,
+  newTweet,
+  setNewTweet,
+  selectedTweet,
+  setSelectedTweet,
+  onLike,
+  onRetweet,
+  onExpandTweet,
+  session,
+}) => (
+  <main className="flex-1 p-4">
+    <button
+      className="md:hidden mb-4 p-2 bg-blue-500 text-white rounded"
+      onClick={onToggleSidebar}
+    >
+      Toggle Sidebar
+    </button>
+    <TweetForm
+      onSubmit={onTweetSubmit}
+      newTweet={newTweet}
+      setNewTweet={setNewTweet}
+    />
+    {selectedTweet ? (
+      <ExpandedTweet
+        tweet={selectedTweet}
+        onBack={() => setSelectedTweet(null)}
+        onLike={onLike}
+        onRetweet={onRetweet}
+        session={session}
+      />
+    ) : (
+      <div className="space-y-4 mt-4">
+        {tweets.map((tweet) =>
+          tweet.user ? (
+            <Tweet
+              key={tweet.id}
+              tweet={tweet}
+              onClick={() => onExpandTweet(tweet)}
+              onLike={onLike}
+              onRetweet={onRetweet}
+              session={session}
+            />
+          ) : (
+            <div key={tweet.id} className="p-4 bg-red-100 rounded-lg shadow-lg">
+              <p>Tweet data is incomplete</p>
+            </div>
+          )
+        )}
+      </div>
+    )}
+  </main>
+);
+
+const TweetForm = ({ onSubmit, newTweet, setNewTweet }) => (
+  <motion.form
+    className="bg-gray-700 p-4 rounded shadow-md"
+    initial={{ scale: 0.8, opacity: 0 }}
+    animate={{ scale: 1, opacity: 1 }}
+    transition={{ duration: 0.5 }}
+    onSubmit={onSubmit}
+  >
+    <textarea
+      className="w-full p-2 rounded border border-gray-600 bg-gray-800 text-white focus:outline-none focus:border-blue-500"
+      rows="3"
+      placeholder="What's happening?"
+      value={newTweet}
+      onChange={(e) => setNewTweet(e.target.value)}
+    ></textarea>
+    <button
+      type="submit"
+      className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+    >
+      Tweet
+    </button>
+  </motion.form>
+);
+
+const Tweet = ({ tweet, onClick, onLike, onRetweet, session }) => {
+  const hasLiked = tweet.likes?.some(
+    (like) => like.userId === session?.user?.id
+  );
+  const hasRetweeted = tweet.retweets?.some(
+    (retweet) => retweet.userId === session?.user?.id
+  );
+
+  return (
+    <motion.div
+      className="flex flex-col md:flex-row space-x-4 p-4 bg-gray-800 rounded-lg shadow-md hover:shadow-lg border border-gray-700 cursor-pointer"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+      onClick={onClick}
+      whileHover={{ scale: 1.02 }}
+    >
+      <Link href={`/profile/${tweet.user.username}`}>
+        <Image
+          src={tweet.user.profilePic || "/default-avatar.png"}
+          alt={`${tweet.user.name}'s avatar`}
+          width={50}
+          height={50}
+          className="rounded-full cursor-pointer"
+        />
+      </Link>
+      <div className="flex-1">
+        <div className="flex items-center space-x-2">
+          <Link href={`/profile/${tweet.user.username}`}>
+            {tweet.user.name}
+          </Link>
+          <span className="text-gray-400">@{tweet.user.username}</span>
+        </div>
+        <p className="mt-1">{tweet.content}</p>
+        <div className="mt-2 flex items-center space-x-4 text-gray-400">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onLike(tweet.id);
+            }}
+            className="hover:text-white"
+          >
+            <FontAwesomeIcon
+              icon={faHeart}
+              className={hasLiked ? "text-red-500" : "text-gray-400"}
+            />
+            ({tweet.likes?.length || 0})
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRetweet(tweet.id);
+            }}
+            className="hover:text-white"
+          >
+            <FontAwesomeIcon
+              icon={faRetweet}
+              className={hasRetweeted ? "text-green-500" : "text-gray-400"}
+            />
+            ({tweet.retweets?.length || 0})
+          </button>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const ExpandedTweet = ({ tweet, onBack, onLike, onRetweet, session }) => {
+  const hasLiked = tweet.likes?.some(
+    (like) => like.userId === session?.user?.id
+  );
+  const hasRetweeted = tweet.retweets?.some(
+    (retweet) => retweet.userId === session?.user?.id
+  );
+
+  return (
+    <motion.div
+      className="flex-1 flex flex-col p-4 bg-gray-900 overflow-y-auto rounded-lg shadow-md border border-gray-700"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      <button
+        className="self-start mb-4 p-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        onClick={onBack}
+      >
+        Back
+      </button>
+      <div className="flex flex-col md:flex-row space-x-4 p-4 bg-gray-800 rounded-lg shadow-md border border-gray-700">
+        <Link href={`/profile/${tweet.user.username}`}>
+          <Image
+            src={tweet.user.profilePic || "/default-avatar.png"}
+            alt={`${tweet.user.name}'s avatar`}
+            width={50}
+            height={50}
+            className="rounded-full cursor-pointer"
+          />
+        </Link>
+        <div className="flex-1">
+          <div className="flex items-center space-x-2">
+            <Link href={`/profile/${tweet.user.username}`}>
+              {tweet.user.name}
+            </Link>
+            <span className="text-gray-400">@{tweet.user.username}</span>
+          </div>
+          <p className="mt-1">{tweet.content}</p>
+
+          <div className="mt-2 flex items-center space-x-4 text-gray-400">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onLike(tweet.id);
+              }}
+              className="hover:text-white"
+            >
+              <FontAwesomeIcon
+                icon={faHeart}
+                className={hasLiked ? "text-red-500" : "text-gray-400"}
+              />
+              ({tweet.likes?.length || 0})
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRetweet(tweet.id);
+              }}
+              className="hover:text-white"
+            >
+              <FontAwesomeIcon
+                icon={faRetweet}
+                className={hasRetweeted ? "text-green-500" : "text-gray-400"}
+              />
+              ({tweet.retweets?.length || 0})
+            </button>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};

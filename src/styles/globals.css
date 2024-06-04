@@ -2,32 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+body {
+  @apply bg-black;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+@screen sm {
+  body {
+    @apply mx-4;
   }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+@screen md {
+  body {
+    @apply mx-8;
+  }
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+@screen lg {
+  body {
+    @apply mx-16;
+  }
+}
+
+@screen xl {
+  body {
+    @apply mx-32;
+  }
+}
+
+@screen 2xl {
+  body {
+    @apply mx-48;
   }
 }
