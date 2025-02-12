@@ -37,8 +37,20 @@ export default function Home() {
     fetchTweets();
   }, []);
 
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      setIsModalOpen(true);
+    }
+  }, [status]);
+
   const handlePostNewTweet = async (e) => {
     e.preventDefault();
+
+    if (!session) {
+      setIsModalOpen(true);
+      return;
+    }
+
     if (!newTweet.trim()) return;
 
     try {
@@ -250,29 +262,39 @@ const MainContent = ({
   </main>
 );
 
-const TweetForm = ({ onSubmit, newTweet, setNewTweet }) => (
-  <motion.form
-    className="bg-gray-700 p-4 rounded shadow-md"
-    initial={{ scale: 0.8, opacity: 0 }}
-    animate={{ scale: 1, opacity: 1 }}
-    transition={{ duration: 0.5 }}
-    onSubmit={onSubmit}
-  >
-    <textarea
-      className="w-full p-2 rounded border border-gray-600 bg-gray-800 text-white focus:outline-none focus:border-blue-500"
-      rows="3"
-      placeholder="What's happening?"
-      value={newTweet}
-      onChange={(e) => setNewTweet(e.target.value)}
-    ></textarea>
-    <button
-      type="submit"
-      className="mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+const TweetForm = ({ onSubmit, newTweet, setNewTweet }) => {
+  const { data: session } = useSession();
+
+  return (
+    <motion.form
+      className="bg-gray-700 p-4 rounded shadow-md"
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.5 }}
+      onSubmit={onSubmit}
     >
-      Tweet
-    </button>
-  </motion.form>
-);
+      <textarea
+        className="w-full p-2 rounded border border-gray-600 bg-gray-800 text-white focus:outline-none focus:border-blue-500"
+        rows="3"
+        placeholder={session ? "What's happening?" : "Please sign in to tweet"}
+        value={newTweet}
+        onChange={(e) => setNewTweet(e.target.value)}
+        disabled={!session}
+      ></textarea>
+      <button
+        type="submit"
+        className={`mt-2 px-4 py-2 rounded ${
+          session
+            ? "bg-blue-500 hover:bg-blue-600"
+            : "bg-gray-500 cursor-not-allowed"
+        } text-white`}
+        disabled={!session}
+      >
+        Tweet
+      </button>
+    </motion.form>
+  );
+};
 
 const Tweet = ({ tweet, onClick, onLike, onRetweet, session }) => {
   const hasLiked = tweet.likes?.some(

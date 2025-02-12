@@ -22,8 +22,8 @@ export default NextAuth({
           if (user && (await compare(credentials.password, user.password))) {
             const accessToken = jwt.sign(
               { userId: user.id, email: user.email },
-              process.env.NEXTAUTH_SECRET, // Ensure you have a secret key in your environment variables
-              { expiresIn: "365d" } // Token expiration time
+              process.env.NEXTAUTH_SECRET,
+              { expiresIn: "365d" }
             );
             return {
               id: user.id,
